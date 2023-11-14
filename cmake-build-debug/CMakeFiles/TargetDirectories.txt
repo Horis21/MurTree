@@ -1,0 +1,3 @@
+C:/Users/Horis/Documents/Algoritmus/Aslan/ODT/cmake-build-debug/CMakeFiles/ODT.dir
+C:/Users/Horis/Documents/Algoritmus/Aslan/ODT/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/Horis/Documents/Algoritmus/Aslan/ODT/cmake-build-debug/CMakeFiles/rebuild_cache.dir
