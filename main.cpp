@@ -15,17 +15,26 @@ int nrInstances = 0;
 
 int id=0;
 
-struct instance{
+struct instance {
     int id;
-    vector<bool> features;
-    vector<int> attributes;
+    std::vector<bool> features;
+    std::vector<int> attributes;
 };
+
+
+vector<vector<instance*>> inD;
+vector<vector<instance*>> outD;
+vector<vector<instance*>> in1;
+vector<vector<instance*>> in2;
+vector<vector<instance*>> out1;
+vector<vector<instance*>> out2;
+
 
 vector<vector<map<set<int>,pair<int,int>>>> cache;
 
-vector<vector<instance>> instances;
+vector<vector<instance*>> instances;
 
-int solve(int d,const vector<vector<instance>>& data, int ub);
+int solve(int d,const vector<vector<instance*>>& data, int ub);
 
 ifstream in(R"(C:\Users\Horis\Documents\Algoritmus\Aslan\ODT\anneal.txt)");
 
@@ -43,15 +52,16 @@ void addInstance(const string& line){
         feats.push_back(feat);
     }
     if(instances.size() <= label) instances.resize(label+1);
-    instance i;
-    i.attributes = atts;
-    i.features = feats;
-    i.id = id;
-    id++;
+    instance *i = new instance;
+    i->id = id;
+    i->attributes = atts;
+    i->features = feats;
     instances[label].push_back(i);
+    id++;
+
 }
 
-int optimal(const vector<vector<instance>>& data){
+int optimal(const vector<vector<instance*>>& data){
     int max = 0;
     int total = 0;
     for(const auto& label : data){
@@ -61,10 +71,12 @@ int optimal(const vector<vector<instance>>& data){
     return total - max;
 }
 
-void splitData(int feat,const vector<vector<instance>>& data, vector<vector<instance>>& posData, vector<vector<instance>>& negData){
+void splitData(int feat,const vector<vector<instance*>>& data, vector<vector<instance*>>& posData, vector<vector<instance*>>& negData){
+    posData.clear();
+    negData.clear();
     for(int label=0; label < data.size(); label++){
-        for(auto instance : data[label]){
-            if(instance.features[feat]){
+        for(instance *instance : data[label]){
+            if(instance->features[feat]){
                 if(posData.size() <= label) posData.resize(label+1);
                 posData[label].push_back(instance);
             }
@@ -82,22 +94,22 @@ vector<int> BL;
 
 
 struct prevDatasetFQ{
-    vector<vector<instance>> prevDataSpec2;
+    vector<vector<instance*>> prevDataSpec2;
     vector<vector<int>> FQpos;
     vector<vector<int>> FQneg;
     vector<int> FQneg1;
     vector<int> FQpos1;
 };
 
-vector<pair<vector<vector<instance>>,vector<vector<instance>>>> prevSimData;
+vector<pair<vector<vector<instance*>>,vector<vector<instance*>>>> prevSimData;
 
 pair<prevDatasetFQ,prevDatasetFQ> prevsSpec2;
 
-set<int> extract(const vector<vector<instance>>& data){
+set<int> extract(const vector<vector<instance*>>& data){
     set<int> s;
-    for(vector<instance> l : data){
-        for(const instance& i : l){
-            s.insert(i.id);
+    for(const vector<instance*>& l : data){
+        for(const instance* i : l){
+            s.insert(i->id);
         }
     }
     return s;
@@ -105,6 +117,12 @@ set<int> extract(const vector<vector<instance>>& data){
 
 
 void initialise(){
+    in1.resize(2);
+    in2.resize(2);
+    out2.resize(2);
+    out1.resize(2);
+    inD.resize(2);
+    outD.resize(2);
     prevsSpec2.first.prevDataSpec2.resize(2);
     prevsSpec2.second.prevDataSpec2.resize(2);
     prevsSpec2.first.FQpos.resize(2*nrFeats);
@@ -134,9 +152,12 @@ void initialise(){
 }
 
 
-void computeFQ(const vector<instance>& data, vector<vector<int>>& FQ, vector<int>& FQ1, bool incoming){
-    for(const instance& ins : data){
-        vector<int> v = ins.attributes;
+void computeFQ(const vector<instance*>& data, vector<vector<int>>& FQ, vector<int>& FQ1, bool incoming){
+    for(instance *ins : data){
+        if(ins -> attributes.empty()){
+            return;
+        }
+        auto v = ins->attributes;
         for(int i=0; i<v.size(); i++){
             if(incoming){
                 FQ1[v[i]]++;
@@ -200,28 +221,27 @@ void computeCS(vector<vector<int>>& FQpos, vector<vector<int>>& FQneg){
 }
 
 
-bool symDiff(const vector<vector<instance>>& data, vector<vector<instance>>& inData, vector<vector<instance>>& outData) {
+bool symDiff(const vector<vector<instance*>>& data) {
     int count1=0,count2=0;
-    vector<vector<instance>> in1;
-    vector<vector<instance>> in2;
-    vector<vector<instance>> out1;
-    vector<vector<instance>> out2;
-    in1.resize(2);
-    in2.resize(2);
-    out1.resize(2);
-    out2.resize(2);
+    inD.clear();
+    outD.clear();
+
+    in1.clear();
+    in2.clear();
+    out1.clear();
+    out2.clear();
     for(int l=0;l<2;l++){
        int i=0,j=0;
-       const vector<instance>& cur = data[l];
-       vector<instance>& first = prevsSpec2.first.prevDataSpec2[l];
-       vector<instance>& second = prevsSpec2.second.prevDataSpec2[l];
+       const vector<instance*>& cur = data[l];
+       vector<instance*>& first = prevsSpec2.first.prevDataSpec2[l];
+       vector<instance*>& second = prevsSpec2.second.prevDataSpec2[l];
        while(i < cur.size() && j < first.size()){
-           if(cur[i].id == first[j].id){
+           if(cur[i]->id == first[j]->id){
                count1++;
                i++;
                j++;
            }
-           else if(cur[i].id < first[j].id){
+           else if(cur[i]->id < first[j]->id){
                in1[l].push_back(cur[i]);
                i++;
            }
@@ -240,12 +260,12 @@ bool symDiff(const vector<vector<instance>>& data, vector<vector<instance>>& inD
        }
        i=0,j=0;
         while(i < cur.size() && j < second.size()){
-            if(cur[i].id == second[j].id){
+            if(cur[i]->id == second[j]->id){
                 count2++;
                 i++;
                 j++;
             }
-            else if(cur[i].id < second[j].id){
+            else if(cur[i]->id < second[j]->id){
                 in2[l].push_back(cur[i]);
                 i++;
             }
@@ -265,8 +285,8 @@ bool symDiff(const vector<vector<instance>>& data, vector<vector<instance>>& inD
     }
     if(count1 > count2 ){
         for(int l=0; l<2; l++){
-            for(const instance& i : in1[l]) inData[l].push_back(i);
-            for(const instance& i : out1[l]) outData[l].push_back(i);
+            for(instance *i : in1[l]) inD[l].push_back(i);
+            for(instance *i : out1[l]) outD[l].push_back(i);
         }
 //        inData = in1;
 //        outData = out1;
@@ -274,8 +294,8 @@ bool symDiff(const vector<vector<instance>>& data, vector<vector<instance>>& inD
     }
     else{
         for(int l=0; l<2; l++){
-            for(const instance& i : in2[l]) inData[l].push_back(i);
-            for(const instance& i : out2[l]) outData[l].push_back(i);
+            for(instance *i : in2[l]) inD[l].push_back(i);
+            for(instance *i : out2[l]) outD[l].push_back(i);
         }
         /*inData = in2;
         outData = out2;*/
@@ -283,19 +303,19 @@ bool symDiff(const vector<vector<instance>>& data, vector<vector<instance>>& inD
     }
 }
 
-void copyData(const vector<vector<instance>>& data,bool first){
+void copyData(const vector<vector<instance*>>& data,bool first){
     if(first){
-        prevsSpec2.first.prevDataSpec2 = vector<vector<instance>>();
+        prevsSpec2.first.prevDataSpec2 = vector<vector<instance*>>();
         prevsSpec2.first.prevDataSpec2.resize(2);
         for(int l =0 ; l < 2; l++){
-            for(const instance& i : data[l]) prevsSpec2.first.prevDataSpec2[l].push_back(i);
+            for(instance *i : data[l]) prevsSpec2.first.prevDataSpec2[l].push_back(i);
         }
     }
     else{
-        prevsSpec2.second.prevDataSpec2 = vector<vector<instance>>();
+        prevsSpec2.second.prevDataSpec2 = vector<vector<instance*>>();
         prevsSpec2.second.prevDataSpec2.resize(2);
         for(int l =0 ; l < 2; l++){
-            for(const instance& i : data[l]) prevsSpec2.second.prevDataSpec2[l].push_back(i);
+            for(instance *i : data[l]) prevsSpec2.second.prevDataSpec2[l].push_back(i);
         }
     }
 }
@@ -310,29 +330,27 @@ void resetFQ(bool first, bool positive){
     }
 }
 
-int special2(const vector<vector<instance>> data){
-    const vector<instance>& posData = data[1];
-    const vector<instance>& negData = data[0];
+
+int special2(const vector<vector<instance*>>& data){
+    const vector<instance*>& posData = data[1];
+    const vector<instance*>& negData = data[0];
     if(posData.empty() || negData.empty()) return 0;
     BR.assign(nrFeats,INT32_MAX/4);
     BL.assign(nrFeats,INT32_MAX/4);
     int sol = INT32_MAX-12;
-    vector<vector<instance>> in;
-    vector<vector<instance>> out;
-    in.resize(2);
-    out.resize(2);
-    if(symDiff(data, in, out)){
-        if(in[0].size() + out[0].size() < data[0].size()){
-            computeFQ(in[0],prevsSpec2.first.FQneg,prevsSpec2.first.FQneg1,true);
-            computeFQ(out[0],prevsSpec2.first.FQneg,prevsSpec2.first.FQneg1,false);
+
+    if(symDiff(data)){
+        if(inD[0].size() + outD[0].size() < data[0].size()){
+            computeFQ(inD[0], prevsSpec2.first.FQneg, prevsSpec2.first.FQneg1, true);
+            computeFQ(outD[0],prevsSpec2.first.FQneg,prevsSpec2.first.FQneg1,false);
         }
         else{
             resetFQ(true,false);
             computeFQ(negData,prevsSpec2.first.FQneg,prevsSpec2.first.FQneg1,true);
         }
-        if(in[1].size() + out[1].size() < data[1].size()){
-            computeFQ(in[1],prevsSpec2.first.FQpos,prevsSpec2.first.FQpos1,true);
-            computeFQ(out[1],prevsSpec2.first.FQpos,prevsSpec2.first.FQpos1,false);
+        if(inD[1].size() + outD[1].size() < data[1].size()){
+            computeFQ(inD[1], prevsSpec2.first.FQpos, prevsSpec2.first.FQpos1, true);
+            computeFQ(outD[1],prevsSpec2.first.FQpos,prevsSpec2.first.FQpos1,false);
         }
         else{
             resetFQ(true,true);
@@ -344,17 +362,17 @@ int special2(const vector<vector<instance>> data){
         copyData(data,true);
     }
     else{
-        if(in[0].size() + out[0].size() < data[0].size()){
-            computeFQ(in[0],prevsSpec2.second.FQneg,prevsSpec2.second.FQneg1,true);
-            computeFQ(out[0],prevsSpec2.second.FQneg,prevsSpec2.second.FQneg1,false);
+        if(inD[0].size() + outD[0].size() < data[0].size()){
+            computeFQ(inD[0], prevsSpec2.second.FQneg, prevsSpec2.second.FQneg1, true);
+            computeFQ(outD[0],prevsSpec2.second.FQneg,prevsSpec2.second.FQneg1,false);
         }
         else{
             resetFQ(false,false);
             computeFQ(negData,prevsSpec2.second.FQneg,prevsSpec2.second.FQneg1,true);
         }
-        if(in[1].size() + out[1].size() < data[1].size()){
-            computeFQ(in[1],prevsSpec2.second.FQpos,prevsSpec2.second.FQpos1,true);
-            computeFQ(out[1],prevsSpec2.second.FQpos,prevsSpec2.second.FQpos1,false);
+        if(inD[1].size() + outD[1].size() < data[1].size()){
+            computeFQ(inD[1], prevsSpec2.second.FQpos, prevsSpec2.second.FQpos1, true);
+            computeFQ(outD[1],prevsSpec2.second.FQpos,prevsSpec2.second.FQpos1,false);
         }
         else{
             resetFQ(false,true);
@@ -382,38 +400,38 @@ int retrieveLB(const set<int>& presIns, int d, int dataSize){
     return 0;
 }
 
-void copyDataSim(const vector<vector<instance>>& data, int d, bool first){
+void copyDataSim(const vector<vector<instance*>>& data, int d, bool first){
     if(first){
-        prevSimData[d].first = vector<vector<instance>>();
+        prevSimData[d].first = vector<vector<instance*>>();
         prevSimData[d].first.resize(data.size());
         for(int l=0;l<data.size();l++){
-            for(const instance& i : data[l]) prevSimData[d].first[l].push_back(i);
+            for(instance *i : data[l]) prevSimData[d].first[l].push_back(i);
         }
     }
     else{
-        prevSimData[d].second = vector<vector<instance>>();
+        prevSimData[d].second = vector<vector<instance*>>();
         prevSimData[d].second.resize(data.size());
         for(int l=0;l<data.size();l++){
-            for(const instance& i : data[l]) prevSimData[d].second[l].push_back(i);
+            for(instance *i : data[l]) prevSimData[d].second[l].push_back(i);
         }
     }
 }
 
-pair<int, bool> computeSim(const vector<vector<instance>> &data, int d, int dataSize) {
+pair<int, bool> computeSim(const vector<vector<instance*>> &data, int d, int dataSize) {
     if(prevSimData[d].first.empty()) return {0,true};
     else{
         int same1=0,same2=0,out1=0,out2=0;
         for(int l=0;l<data.size();l++){
             int i=0,j=0;
-            const vector<instance>& cur = data[l];
-            vector<instance>& first = prevSimData[d].first[l];
+            const vector<instance*>& cur = data[l];
+            vector<instance*>& first = prevSimData[d].first[l];
             while(i < cur.size() && j < first.size()){
-                if(cur[i].id == first[j].id){
+                if(cur[i]->id == first[j]->id){
                     same1++;
                     i++;
                     j++;
                 }
-                else if(cur[i].id < first[j].id){
+                else if(cur[i]->id < first[j]->id){
                     i++;
                 }
                 else{
@@ -427,14 +445,14 @@ pair<int, bool> computeSim(const vector<vector<instance>> &data, int d, int data
             }
             if(prevSimData[d].second.empty()) continue;
             i=0,j=0;
-            vector<instance>& second = prevSimData[d].second[l];
+            vector<instance*>& second = prevSimData[d].second[l];
             while(i < cur.size() && j < second.size()){
-                if(cur[i].id == second[j].id){
+                if(cur[i]->id == second[j]->id){
                     same2++;
                     i++;
                     j++;
                 }
-                else if(cur[i].id < second[j].id){
+                else if(cur[i]->id < second[j]->id){
                     i++;
                 }
                 else{
@@ -456,7 +474,7 @@ pair<int, bool> computeSim(const vector<vector<instance>> &data, int d, int data
     }
 }
 
-bool updateLB(const vector<vector<instance>>& data, int d, int dataSize,const set<int>& presIns){
+bool updateLB(const vector<vector<instance*>>& data, int d, int dataSize,const set<int>& presIns){
     if(prevSimData[d].first.empty()) return true;
     else{
         pair<int,bool> simLB = computeSim(data, d, dataSize);
@@ -470,7 +488,7 @@ bool updateLB(const vector<vector<instance>>& data, int d, int dataSize,const se
     }
 }
 
-void replaceSimData(const vector<vector<instance>>& data, int d,bool first){
+void replaceSimData(const vector<vector<instance*>>& data, int d,bool first){
     if(prevSimData[d].first.empty()){
         copyDataSim(data,d,true);
     }
@@ -482,9 +500,8 @@ void replaceSimData(const vector<vector<instance>>& data, int d,bool first){
     }
 }
 
-pair<int,int> solveFeat(int d,const vector<vector<instance>>& data, int ub, int i){
-    vector<vector<instance>> posData;
-    vector<vector<instance>> negData;
+pair<int,int> solveFeat(int d,const vector<vector<instance*>>& data, int ub, int i,vector<vector<instance*>>& posData,vector<vector<instance*>>& negData){
+
     splitData(i,data,posData,negData);
     int left,right;
     if(optimal(posData) > optimal(negData)){
@@ -531,7 +548,7 @@ pair<int,int> solveFeat(int d,const vector<vector<instance>>& data, int ub, int 
 
 
 
-int solve(int d,const vector<vector<instance>>& data, int ub){
+int solve(int d,const vector<vector<instance*>>& data, int ub){
     if(ub < 0) return -1;
     if(data.empty() || data.size() == 1 || data.size() == 0) return 0;
     if(d==0){
@@ -555,9 +572,11 @@ int solve(int d,const vector<vector<instance>>& data, int ub){
     }
     int rlb = INT32_MAX;
     int ubr;
+    vector<vector<instance*>> posData;
+    vector<vector<instance*>> negData;
     for(int i=0;i<nrFeats;i++){
         ubr = min(ub,best-1);
-        pair<int,int> tree = solveFeat(d,data,ubr,i);
+        pair<int,int> tree = solveFeat(d,data,ubr,i,posData,negData);
         int t = tree.first;
         if(t != -1) best = t;
         else rlb = min(rlb,tree.second);
@@ -579,8 +598,10 @@ int solve(int d,const vector<vector<instance>>& data, int ub){
 
 void initPrev(){
     for(int l=0; l<2; l++){
-        for(const instance& i : instances[l]) prevsSpec2.first.prevDataSpec2[l].push_back(i);
-        for(const instance& i : instances[l]) prevsSpec2.second.prevDataSpec2[l].push_back(i);
+        for(instance *i : instances[l]) {
+            prevsSpec2.first.prevDataSpec2[l].push_back(i);
+            prevsSpec2.second.prevDataSpec2[l].push_back(i);
+        }
     }
     computeFQ(instances[1],prevsSpec2.first.FQpos,prevsSpec2.first.FQpos1,true);
     computeFQ(instances[0],prevsSpec2.first.FQneg,prevsSpec2.first.FQneg1,true);
@@ -600,7 +621,7 @@ int main() {
     string line;
     time_t start, end;
     time(&start);
-    while(getline(in,line)){
+    while(getline(in, line)){
         addInstance(line);
         nrInstances++;
     }
